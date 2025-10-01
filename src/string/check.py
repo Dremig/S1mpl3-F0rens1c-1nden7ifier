@@ -63,11 +63,41 @@ def string_it(filepath):
     return result.stdout
 
 
+def is_valid_flag_format(format):
+    '''
+    check if format is valid
+    '''
+    if "{" not in format or format.endswith("}\n"):
+        log.error("format must be in the form of ...{...}, for example: flag{...}")
+        return False
+    else:
+        parts = format.split("{", 1)
+        if len(parts) < 2:
+            log.error("format must be in the form of ...{...}, for example: flag{...}")
+            return False
+        
+        return True
+
+
+def is_valid_flag(format, flag):
+    '''
+    check if flag suits the format
+    '''
+    parts = format.split('{', 1)
+    former, later = parts
+    flag.replace("\n", "")
+    if flag.startwith(former) and flag.endwith("}"):
+        return True
+    else:
+        return False
+
+
     
 
-def flag_format(format, result):
+
+def search_for_flag_directly(format, result):
     '''
-    search for flag that may fit flag format
+    search for flag that is shown "directly" in text
     '''
     flags = []
     
@@ -109,3 +139,49 @@ def flag_format(format, result):
             log.info("No flag found. Maybe you can search for some encoding string like base64.")
         
         return True
+
+
+def is_a_qrcode():
+    pass
+
+
+
+    
+def find_continuous_binary(result, format):
+    pattern = r'[01]+'
+    matches = re.findall(pattern, result)
+    for match in matches:
+        can_use = True
+        if len(match) < 20:
+            continue
+        if len(match) % 7 == 0:
+            result_str = ""
+            for i in range(0, len(match), 7):
+                # result_str += chr(int(match[i:i+7], 2))
+                int_char = int(match[i:i+7], 2)
+                if int_char > 128 or int_char < 32:
+                    can_use = False
+                    break
+                else:
+                    result_str += chr(int_char)
+        if len(match) % 8 == 0:
+            result_str = ""
+            for i in range(0, len(match), 8):
+                # result_str += chr(int(match[i:i+8], 2))
+                int_char = int(match[i:i+8], 2)
+                if int_char > 128 or int_char < 32:
+                    can_use = False
+                    break
+                else:
+                    result_str += chr(int_char)
+
+        if can_use:
+            log.success(f"Found continuous binary, and can be encoded as: {result_str}")
+            return True
+
+
+
+    
+
+
+
