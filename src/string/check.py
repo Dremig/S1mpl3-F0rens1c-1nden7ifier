@@ -3,6 +3,9 @@ from ..logger.logger import Logger as log
 import subprocess
 import re
 import os
+from pyzbar.pyzbar import decode
+from PIL import Image, ImageDraw
+import numpy as np
 
 TEMP_STRING_FILE = "temp"
 UPLOAD_PATH = "upload"
@@ -29,6 +32,9 @@ def not_exist_to_ask():
         pass
 
 def check_upload_and_return_it():
+    '''
+    ensure that there is only one file in upload folder, and return its path
+    '''
     count = len(os.listdir(UPLOAD_PATH))
     if not count:
         log.error("No file uploaded, please upload a file first")
@@ -141,17 +147,60 @@ def search_for_flag_directly(format, result):
         return True
 
 
-def is_a_qrcode():
-    pass
 
-
-
+def bitstream_to_qr_image(bitstream, module_size=10, quiet_zone=4):
+    """
+    generate a qrcode image from a bitstream
+    """
+    length = len(bitstream)
+    side_length = int(length ** 0.5)
     
+    if side_length * side_length != length:
+        raise ValueError(f"the bit length {length} is not a perfect square, cannot form a valid QR code.")
+    
+    img_size = (side_length + 2 * quiet_zone) * module_size
+    img = Image.new('RGB', (img_size, img_size), 'white')
+    draw = ImageDraw.Draw(img)
+    
+    for i, bit in enumerate(bitstream):
+        if bit == '1':  
+            row = i // side_length
+            col = i % side_length
+            x0 = (col + quiet_zone) * module_size
+            y0 = (row + quiet_zone) * module_size
+            x1 = x0 + module_size
+            y1 = y0 + module_size
+            draw.rectangle([x0, y0, x1, y1], fill='black')
+    
+    return img
+
+def decode_bitstream_via_image(bitstream):
+    try:
+        qr_image = bitstream_to_qr_image(bitstream)
+        
+        decoded_objects = decode(Image.open(qr_image))
+        
+        if decoded_objects:
+            result = decoded_objects[0]
+            log.success(f"Decoded QR code content: {result.data.decode('utf-8')}")
+        else:
+            pass
+    except Exception as e:
+        pass
+
+
+
+
+
 def find_continuous_binary(result, format):
+    """
+    search for information that stored in binary 
+    """
     pattern = r'[01]+'
     matches = re.findall(pattern, result)
     for match in matches:
         can_use = True
+        decode_already = False
         if len(match) < 20:
             continue
         if len(match) % 7 == 0:
@@ -164,6 +213,12 @@ def find_continuous_binary(result, format):
                     break
                 else:
                     result_str += chr(int_char)
+
+
+            if can_use:
+                decode_already = True
+
+
         if len(match) % 8 == 0:
             result_str = ""
             for i in range(0, len(match), 8):
@@ -175,9 +230,17 @@ def find_continuous_binary(result, format):
                 else:
                     result_str += chr(int_char)
 
-        if can_use:
-            log.success(f"Found continuous binary, and can be encoded as: {result_str}")
-            return True
+            if can_use:
+                decode_already = True
+
+        
+
+        if can_use and decode_already:
+            log.success(f"Found continuous binary, and can be encoded as ascii in str : {result_str}")
+
+
+        decode_bitstream_via_image(match)
+
 
 
 
